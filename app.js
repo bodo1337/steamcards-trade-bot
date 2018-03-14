@@ -1,7 +1,10 @@
 const config = require('./config.json');
 const SteamUser = require('steam-user');
 const TradeOfferManager = require('steam-tradeoffer-manager');
+const SteamTotp = require('steam-totp');
+const SteamCommunity = require('steamcommunity');
 const client = new SteamUser();
+const community = new SteamCommunity();
 
 const manager = new TradeOfferManager({
     "steam": client,
@@ -10,20 +13,28 @@ const manager = new TradeOfferManager({
 
 const logOnOptions = {
 	accountName: config.username,
-	password: config.password
-};
+	password: config.password,
+  twoFactorCode: SteamTotp.generateAuthCode(config.secret)
+}
 
 var cardList = config.saleCardsWhitelist;
 var readyToTrade = false;
 
 client.logOn(logOnOptions);
 
+client.on('steamGuard', function(domain, callback) {
+	console.log("Steam Guard code needed from email ending in " + domain);
+	var code = getCodeSomehow();
+	callback(code);
+});
+
 client.on('loggedOn', () => {
 	console.log('sucessfully logged on.');
 	client.setPersona(SteamUser.Steam.EPersonaState.Online)
   // SETS COOKIES FOR TRADING
   client.on('webSession', (sessionID, cookies) => {
-  	manager.setCookies(cookies)
+  	manager.setCookies(cookies);
+    community.setCookies(cookies);
     console.log("Set cookies!");
     readyToTrade = true;
   });
@@ -45,7 +56,7 @@ var recieveOffers = () => {
   manager.getOffers(1, (err, sent, recieved) => {
     if(!err) {
       recieved.forEach((offer) => {
-        console.log("Got new offer " + offer.id);
+        console.log(`[${offer.id}] Got new offer ` + offer.id);
         offerFilter(offer);
       })
     }
@@ -57,51 +68,37 @@ var offerFilter = (offer) => {
 }
 
 var declineFilter = (offer) => {
-  var id = offer.id;
-  var decline = false;
+  // var id = offer.id;
+  //
+  // console.log("***************RECEIVING***************")
+  // offer.itemsToReceive.forEach((item) => {
+  //   itemOverview(item);
+  // })
+  // console.log("***************SEND***************")
+  // offer.itemsToGive.forEach((item) => {
+  //   itemOverview(item);
+  //   console.log("MULM");
+  // })
 
-  console.log("***************RECEIVING***************")
-  offer.itemsToReceive.forEach((item) => {
-    itemOverview(item);
-  })
-  console.log("***************SEND***************")
-  offer.itemsToGiveforEach((item) => {
-    itemOverview(item);
-  })
+  acceptFilter(offer);
 
-  if(offer.itemsToReceive.length == 0){
-    decline = true;
-    console.log("Recieved Empty offer " + id);
-  }
-
-  if (decline) {
-    offer.decline((err) => {
-      if (err) {
-        console.log(err);
-      } else {
-        console.log('Offer Canceled ' + id);
-      }
-    });
-  } else {
-    acceptFilter(offer);
-  }
 }
 
 var acceptFilter = (offer) => {
+
   var valueGive = 0;
   var valueReceive = 0;
-  var allWhitelisted = true;
-  //TODO whitelist for give and receive -> individual acceptt or decline
+  var whitelistedGive = true;
+  var whitelistedReceive = true;
 
   offer.itemsToGive.forEach((item) => {
     cardList.forEach((whitelist) => {
       if(whitelist == item.classid) {
         valueGive++;
+        console.log(`[${offer.id}] To give: ` + item.name);
       }else {
-        allWhitelisted = false;
-        console.log("Unknown Item!");
-        console.log(whitelist);
-        console.log(item.classid);
+        whitelistedGive = false;
+        console.log(`[${offer.id}] Not whitelisted item to give: ` + item.name);
       }
     })
   })
@@ -110,23 +107,38 @@ var acceptFilter = (offer) => {
     cardList.forEach((whitelist) => {
       if(whitelist == item.classid) {
         valueReceive++;
+        console.log(`[${offer.id}] To receive: ` + item.name);
       }else {
-        allWhitelisted = false;
-        console.log("Unknown Item!");
-        console.log(whitelist);
-        console.log(item.classid);
+        whitelistedReceive = false;
+        console.log(`[${offer.id}] Not whitelisted item to receive: ` + item.name);
       }
     })
   })
 
-  console.log("GIVE: " + valueGive);
-  console.log("RECEIVE: " + valueReceive);
-  console.log("All Whitelisted: " + allWhitelisted);
-  if(valueReceive >= valueGive && allWhitelisted){
-    //send
-    console.log("Sending offer!");
-  } else {
-    console.log("Offer needs manual cheking");
+  // console.log("GIVE: " + valueGive);
+  // console.log("RECEIVE: " + valueReceive);
+  // console.log("Give Whitelisted: " + whitelistedGive);
+  // console.log("Receive Whitelisted: " + whitelistedReceive);
+
+
+  if(!(valueReceive >= valueGive) && !whitelistedGive && !whitelistedReceive){
+    manualOffer(offer);
+  }else if(!(valueReceive >= valueGive) && !whitelistedGive && whitelistedReceive){
+    declineOffer(offer);
+  }else if(!(valueReceive >= valueGive) && whitelistedGive && !whitelistedReceive){
+    manualOffer(offer);
+  }else if(!(valueReceive >= valueGive) && whitelistedGive && whitelistedReceive){
+    declineOffer(offer);
+  }else if((valueReceive >= valueGive) && !whitelistedGive && !whitelistedReceive){
+    manualOffer(offer);
+  }else if((valueReceive > valueGive) && !whitelistedGive && whitelistedReceive){
+    manualOffer(offer);
+  }else if((valueReceive >= valueGive) && !whitelistedGive && whitelistedReceive){
+    declineOffer(offer);
+  }else if((valueReceive >= valueGive) && whitelistedGive && !whitelistedReceive){
+    acceptOffer(offer);
+  }else if((valueReceive >= valueGive) && whitelistedGive && whitelistedReceive){
+    acceptOffer(offer);
   }
 }
 
@@ -134,3 +146,50 @@ var itemOverview = (item) => {
   console.log(item.name);
   console.log(item.classid);
 }
+
+var declineOffer = (offer) => {
+  console.log(`[${offer.id}] Declining offer...`);
+  offer.decline((err) => {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(`[${offer.id}] Offer Declined!`);
+    }
+  });
+}
+var manualOffer = (offer) => {
+  console.log(`[${offer.id}] Offer needs manual checking`);
+}
+var acceptOffer = (offer) => {
+  console.log(`[${offer.id}] Accepting offer`);
+  offer.accept((err) => {
+    if (err) {
+      console.log(err);
+    } else {
+      console.log(`[${offer.id}] Offer accepted!`);
+    }
+  });
+}
+
+
+setTimeout(() => {
+  var time = Math.floor(new Date() / 1000);
+  community.getConfirmations(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "conf"), (err, confirmations) => {
+    if (err) {
+      console.log(err);
+    } else {
+      //TODO array durcharbeiten + filtern dass nur zuvor angenommene ausgeführt werden
+      //TODO POLING EINSTELLUNGEN
+      console.log("Accepting Mobile Confirmation");
+      confirmations[0].respond(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "allow"), true, (err) => {
+        if (err) {
+            console.log("Cannot accept confirmation: " + err.message);
+        } else {
+            console.log("Confirmation accepted successfully");
+        }
+      });
+    }
+  })
+}, 10000);
+//TODO whitelist admin
+//TODO diffrent modes -> same game or whitelist game or whitelist cards

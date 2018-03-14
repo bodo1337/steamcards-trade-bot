@@ -9,7 +9,9 @@
   "author": "Bruno Krauss",
   "license": "ISC",
   "dependencies": {
+    "steam-totp": "^2.0.1",
     "steam-tradeoffer-manager": "^2.9.3",
-    "steam-user": "^3.25.2"
+    "steam-user": "^3.25.2",
+    "steamcommunity": "^3.34.1"
   }
 }
