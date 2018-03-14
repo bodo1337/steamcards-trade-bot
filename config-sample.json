@@ -1,6 +1,8 @@
 {
 	"username":"",
 	"password":"",
+	"secret":"",
+	"identity_secret":"",
 
 	"saleCardsWhitelist":[
 		123456789
