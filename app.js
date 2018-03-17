@@ -171,7 +171,7 @@ var acceptOffer = (offer) => {
   });
 }
 
-
+//TODO polling rate
 setTimeout(() => {
   var time = Math.floor(new Date() / 1000);
   community.getConfirmations(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "conf"), (err, confirmations) => {
@@ -179,15 +179,16 @@ setTimeout(() => {
       console.log(err);
     } else {
       //TODO array durcharbeiten + filtern dass nur zuvor angenommene ausgeführt werden
-      //TODO POLING EINSTELLUNGEN
       console.log("Accepting Mobile Confirmation");
-      confirmations[0].respond(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "allow"), true, (err) => {
-        if (err) {
-            console.log("Cannot accept confirmation: " + err.message);
-        } else {
-            console.log("Confirmation accepted successfully");
-        }
-      });
+      confirmations.forEach((confirmation) => {
+        confirmation.respond(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "allow"), true, (err) => {
+          if (err) {
+              console.log("Cannot accept confirmation: " + err.message);
+          } else {
+              console.log("Confirmation accepted successfully");
+          }
+        });
+      })
     }
   })
 }, 10000);
