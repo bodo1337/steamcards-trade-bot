@@ -172,25 +172,28 @@ var acceptOffer = (offer) => {
 }
 
 //TODO polling rate
-setTimeout(() => {
-  var time = Math.floor(new Date() / 1000);
-  community.getConfirmations(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "conf"), (err, confirmations) => {
-    if (err) {
-      console.log(err);
-    } else {
-      //TODO array durcharbeiten + filtern dass nur zuvor angenommene ausgeführt werden
-      console.log("Accepting Mobile Confirmation");
-      confirmations.forEach((confirmation) => {
-        confirmation.respond(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "allow"), true, (err) => {
-          if (err) {
-              console.log("Cannot accept confirmation: " + err.message);
-          } else {
-              console.log("Confirmation accepted successfully");
-          }
-        });
-      })
-    }
-  })
-}, 10000);
+var getConfirmations = () => {
+  setTimeout(() => {
+    var time = Math.floor(new Date() / 1000);
+    community.getConfirmations(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "conf"), (err, confirmations) => {
+      if (err) {
+        console.log(err);
+      } else {
+        //TODO array durcharbeiten + filtern dass nur zuvor angenommene ausgeführt werden
+        console.log("Accepting Mobile Confirmation");
+        confirmations.forEach((confirmation) => {
+          confirmation.respond(time, SteamTotp.getConfirmationKey(config.identity_secret, time, "allow"), true, (err) => {
+            if (err) {
+                console.log("Cannot accept confirmation: " + err.message);
+            } else {
+                console.log("Confirmation accepted successfully");
+            }
+          });
+        })
+      }
+    })
+  }, 10000);
+  getConfirmations()
+}
 //TODO whitelist admin
 //TODO diffrent modes -> same game or whitelist game or whitelist cards
